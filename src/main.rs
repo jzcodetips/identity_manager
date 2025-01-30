@@ -7,17 +7,20 @@ use actix_web::web;
 
 mod server;
 mod domain;
-mod user_store;
+mod inmem_user_store;
+mod bcrypt_hasher;
 
 use crate::domain::Service;
-use crate::user_store::InMemStore;
+use crate::inmem_user_store::InMemUserStore;
+use crate::bcrypt_hasher::BcryptHasher;
 
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
     env::set_var("RUST_LOG", "actix_web=debug,actix_server=info");
 
-    let user_store = InMemStore::new();
-    let service = Service::new(user_store);
+    let user_store = InMemUserStore::new();
+    let hasher = BcryptHasher::new();
+    let service = Service::new(user_store, hasher);
 
     HttpServer::new(move || {
         App::new()

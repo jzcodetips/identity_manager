@@ -12,34 +12,45 @@ pub struct User {
 
 pub trait UserStore: Send + Sync + 'static {
     fn create_user(&self, user: User) -> Result<(), String>;
-    fn get_user_by_email_and_password(&self, email: &str, password: &str) -> Result<User, String>;
     fn get_user_by_email(&self, email: &str) -> Result<User, String>;
+}
+
+pub trait Hasher: Send + Sync + 'static {
+    fn hash(&self, password: &str) -> Result<String, String>;
+    fn verify(&self, password: &str, hashed_password: &str) -> bool;
 }
 
 #[derive(Clone)]
 pub struct Service {
-    user_store: Arc<dyn UserStore>
+    user_store: Arc<dyn UserStore>,
+    hasher: Arc<dyn Hasher>,
 }
 
 impl Service {
-    pub fn new<T: UserStore>(user_store: T) -> Self {
+    pub fn new<T, U>(user_store: T, hasher: U) -> Self
+    where
+        T: UserStore,
+        U: Hasher + 'static + Send + Sync,
+    {
         Self {
-            user_store: Arc::new(user_store)
+            user_store: Arc::new(user_store),
+            hasher: Arc::new(hasher),
         }
     }
 
     pub fn register(&self, email: &str, password: &str) -> Result<(), String> {
         validate_credentials(email, password)?;
-        println!("registering {}", email);
         
         if let Ok(_) = self.user_store.get_user_by_email(email) {
             return Err("Email already registered".to_string());
         }
 
+        let hashed_password = self.hasher.hash(password)?;
+
         let user = User {
             id: Uuid::new_v4().to_string(),
             email: email.to_string(),
-            password: password.to_string(),
+            password: hashed_password,
         };
 
         self.user_store.create_user(user)
@@ -47,7 +58,13 @@ impl Service {
 
     pub fn login(&self, email: &str, password: &str) -> Result<User, String> {
         validate_credentials(email, password)?;
-        self.user_store.get_user_by_email_and_password(email, password)
+        let user = self.user_store.get_user_by_email(email)?;
+
+        if self.hasher.verify(password, &user.password) {
+            Ok(user)
+        } else {
+            Err("Failed to login".to_string())
+        }
     }
 }
 
