@@ -30,7 +30,7 @@ impl Service {
     pub fn new<T, U>(user_store: T, hasher: U) -> Self
     where
         T: UserStore,
-        U: Hasher + 'static + Send + Sync,
+        U: Hasher,
     {
         Self {
             user_store: Arc::new(user_store),
